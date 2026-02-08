@@ -1,8 +1,7 @@
 // server.js
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs').promises;
-const path = require('path');
+const { MongoClient } = require('mongodb');
 
 const app = express();
 const PORT = process.env.PORT || 3000; // allow hosting platforms to assign their own port
@@ -11,27 +10,26 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// Simple file-based storage (for production, use a real database like MongoDB, PostgreSQL, etc.)
-const DB_FILE = path.join(__dirname, 'passwords.json');
+// MongoDB connection
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
+let db;
+let passwordsCollection;
 
-// Initialize database file
-async function initDB() {
+async function connectDB() {
   try {
-    await fs.access(DB_FILE);
-  } catch {
-    await fs.writeFile(DB_FILE, JSON.stringify({ passwords: [] }));
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    db = client.db('password-system');
+    passwordsCollection = db.collection('passwords');
+    console.log('✓ Connected to MongoDB');
+
+    // Create index for autimatic cleanup
+    await passwordCollection.createIndex({ expiryTime: 1 }, {expireAfterSeconds: 0 });
   }
-}
-
-// Read database
-async function readDB() {
-  const data = await fs.readFile(DB_FILE, 'utf8');
-  return JSON.parse(data);
-}
-
-// Write database
-async function writeDB(data) {
-  await fs.writeFile(DB_FILE, JSON.stringify(data, null, 2));
+  catch (error) {
+    console.error('MongoDB connection error:', error);
+    process.exit(1);
+  }
 }
 
 // Generate alphanumeric password
@@ -46,11 +44,8 @@ function generateAlphaNumericPassword(length = 6) {
 
 // Clean up expired passwords
 async function cleanupExpiredPasswords() {
-  const db = await readDB();
   const now = Date.now();
-  db.passwords = db.passwords.filter(p => p.expiryTime > now);
-  await writeDB(db);
-  return db;
+  await passwordsCollection.deleteMany({ expiryTime: {$lt: now } });
 }
 
 // API: Generate new password
@@ -69,8 +64,9 @@ app.post('/api/generate-password', async (req, res) => {
       createdAt: Date.now()
     };
 
-    db.passwords.push(passwordData);
-    await writeDB(db);
+    await passwordsCollection.insertOne(passwordData);
+
+    const totalActivePasswords = await passwordsCollection.countDocuments();
 
     res.json({
       success: true,
@@ -78,9 +74,10 @@ app.post('/api/generate-password', async (req, res) => {
       passwordId,
       expiryTime,
       expiryDate: new Date(expiryTime).toLocaleString(),
-      totalActivePasswords: db.passwords.length
+      totalActivePasswords
     });
   } catch (error) {
+    console.error('Error generating password:' error);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -94,15 +91,17 @@ app.post('/api/verify-password', async (req, res) => {
       return res.status(400).json({ error: 'Password required' });
     }
 
-    let db = await cleanupExpiredPasswords();
+    await cleanupExpiredPasswords();
 
-    if (db.passwords.length === 0) {
+    const totalPasswords = await passwordsCollection.countDocuments();
+
+    if (totalPasswords === 0) {
       return res.json({ success: false, message: 'No passwords have been generated yet' });
     }
 
-    const matchingPassword = db.passwords.find(
-      p => p.password === password.toUpperCase()
-    );
+    const matchingPassword = await passwordsCollection.findOne({
+      password: password.toUpperCase()
+    });
 
     if (matchingPassword) {
       return res.json({
@@ -115,6 +114,7 @@ app.post('/api/verify-password', async (req, res) => {
       return res.json({ success: false, message: 'Invalid password. Please try again.' });
     }
   } catch (error) {
+    console.error('Error verifying password:' error);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -122,16 +122,18 @@ app.post('/api/verify-password', async (req, res) => {
 // API: Check all active passwords status
 app.get('/api/check-passwords', async (req, res) => {
   try {
-    let db = await cleanupExpiredPasswords();
+    await cleanupExpiredPasswords();
 
-    if (db.passwords.length === 0) {
+    const passwords = await passwordsCollection.find({}).toArray();
+
+    if (passwords.length === 0) {
       return res.json({ exists: false, count: 0 });
     }
 
     res.json({
       exists: true,
-      count: db.passwords.length,
-      passwords: db.passwords.map(p => ({
+      count: passwords.length,
+      passwords: passwords.map(p => ({
         id: p.id,
         password: p.password,
         createdAt: new Date(p.createdAt).toLocaleString(),
@@ -140,6 +142,7 @@ app.get('/api/check-passwords', async (req, res) => {
       }))
     });
   } catch (error) {
+    console.error('Error checking passwords:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -148,18 +151,17 @@ app.get('/api/check-passwords', async (req, res) => {
 app.delete('/api/delete-password/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    let db = await readDB();
 
-    const initialCount = db.passwords.length;
-    db.passwords = db.passwords.filter(p => p.id !== id);
+    const result = await passwordsCollection.deleteOne({ id });
 
-    if (db.passwords.length < initialCount) {
-      await writeDB(db);
+    if (result.deletedCount > 0) {
       return res.json({ success: true, message: 'Password deleted' });
-    } else {
+    } 
+    else {
       return res.json({ success: false, message: 'Password not found' });
     }
   } catch (error) {
+    console.error('Error deleting password:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -167,16 +169,18 @@ app.delete('/api/delete-password/:id', async (req, res) => {
 // API: Delete all passwords
 app.delete('/api/delete-all-passwords', async (req, res) => {
   try {
-    const db = { passwords: [] };
-    await writeDB(db);
+    await passwordsCollection.deleteMany({});
     res.json({ success: true, message: 'All passwords deleted' });
   } catch (error) {
+    console.error('Error deleting passwords:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-initDB().then(() => {
+// Start server
+connectDB().then(() => {
   app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server running on port ${PORT}`);
   });
 });
+
