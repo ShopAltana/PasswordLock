@@ -24,7 +24,7 @@ async function connectDB() {
     console.log('✓ Connected to MongoDB');
 
     // Create index for autimatic cleanup
-    await passwordCollection.createIndex({ expiryTime: 1 }, {expireAfterSeconds: 0 });
+    await passwordsCollection.createIndex({ expiryTime: 1 }, {expireAfterSeconds: 0 });
   }
   catch (error) {
     console.error('MongoDB connection error:', error);
@@ -55,7 +55,7 @@ app.post('/api/generate-password', async (req, res) => {
     const expiryTime = Date.now() + (14 * 24 * 60 * 60 * 1000); // 2 weeks
     const passwordId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
 
-    let db = await cleanupExpiredPasswords();
+    await cleanupExpiredPasswords();
 
     const passwordData = {
       id: passwordId,
@@ -77,7 +77,7 @@ app.post('/api/generate-password', async (req, res) => {
       totalActivePasswords
     });
   } catch (error) {
-    console.error('Error generating password:' error);
+    console.error('Error generating password:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -114,7 +114,7 @@ app.post('/api/verify-password', async (req, res) => {
       return res.json({ success: false, message: 'Invalid password. Please try again.' });
     }
   } catch (error) {
-    console.error('Error verifying password:' error);
+    console.error('Error verifying password:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -183,4 +183,5 @@ connectDB().then(() => {
     console.log(`Server running on port ${PORT}`);
   });
 });
+
 
