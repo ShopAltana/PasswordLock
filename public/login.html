@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login with Password</title>
+    <link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+    <div class="container">
+        <h1>Login</h1>
+        <p class="subtitle">Enter any valid 6-character password to access</p>
+
+        <div class="input-group">
+            <label>Enter Your Password</label>
+            <div class="password-inputs" id="inputs">
+                <input class="password-input" type="text" maxlength="1" />
+                <input class="password-input" type="text" maxlength="1" />
+                <input class="password-input" type="text" maxlength="1" />
+                <input class="password-input" type="text" maxlength="1" />
+                <input class="password-input" type="text" maxlength="1" />
+                <input class="password-input" type="text" maxlength="1" />
+            </div>
+        </div>
+
+        <button class="btn" onclick="verifyPassword()">Login</button>
+
+        <div id="message"></div>
+
+        <div id="statusBox" class="status-box"></div>
+
+    </div>
+
+    <script>
+      const API_URL = '/api'; /* relative render.com url */
+
+      async function verifyPassword() {
+        const inputs = document.querySelectorAll('.password-input');
+        let password = '';
+
+        inputs.forEach(input => {
+          password += input.value;
+        });
+
+        const messageDiv = document.getElementById('message');
+
+        if (password.length !== 6) {
+          messageDiv.className = 'message error';
+          messageDiv.textContent = 'Please enter all 6 characters';
+          return;
+        }
+
+        try {
+          messageDiv.className = 'message info';
+          messageDiv.textContent = 'Verifying...';
+
+          const response = await fetch(`${API_URL}/verify-password`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ password })
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            messageDiv.className = 'message success';
+            messageDiv.innerHTML = `
+              ✓ ${data.message}<br>
+              <small>Password created: ${data.passwordCreated}</small><br>
+              <small>Expires: ${data.expiresOn}</small>
+            `;
+            // Clear inputs
+            inputs.forEach(input => input.value = '');
+
+            // Redirect to dashboard or another page
+            setTimeout(() => {
+              messageDiv.textContent = '✓ Login successful! Redirecting...';
+              window.location.href = 'testHome.html'; // Change this to your desired page
+            }, 1500);
+          } else {
+            messageDiv.className = 'message error';
+            messageDiv.textContent = '✗ ' + data.message;
+          }
+        } catch (error) {
+          messageDiv.className = 'message error';
+          messageDiv.textContent = 'Error connecting to server. Make sure the server is running.';
+        }
+      }
+
+      async function checkPasswordStatus() {
+        try {
+          const response = await fetch(`${API_URL}/check-passwords`);
+          const data = await response.json();
+          const statusBox = document.getElementById('statusBox');
+
+          if (data.exists && data.count > 0) {
+            statusBox.innerHTML = `
+              <p><strong>Active Passwords:</strong> ${data.count} password${data.count > 1 ? 's' : ''} available ✓</p>
+              <p><small>Any of the ${data.count} generated password${data.count > 1 ? 's' : ''} can be used to login</small></p>
+            `;
+          } else {
+            statusBox.innerHTML = `
+              <p><strong>Password Status:</strong> No active passwords</p>
+              <p>Please generate a password first.</p>
+            `;
+          }
+        } catch (error) {
+          console.error('Error checking status:', error);
+        }
+      }
+
+      // Input handling
+      const inputs = document.getElementById("inputs");
+
+      inputs.addEventListener("input", function (e) {
+        const target = e.target;
+        let val = target.value;
+
+        if (!/^[a-zA-Z0-9]$/.test(val)) {
+          target.value = "";
+          return;
+        }
+
+        if (val !== "") {
+          const next = target.nextElementSibling;
+          if (next) {
+            next.focus();
+          }
+        }
+      });
+
+      inputs.addEventListener("keyup", function (e) {
+        const target = e.target;
+        const key = e.key.toLowerCase();
+
+        if (key === "backspace" || key === "delete") {
+          target.value = "";
+          const prev = target.previousElementSibling;
+          if (prev) {
+            prev.focus();
+          }
+          return;
+        }
+      });
+
+      // Allow pasting
+      inputs.addEventListener("paste", function(e) {
+        e.preventDefault();
+        const paste = e.clipboardData.getData('text').toUpperCase();
+        const inputElements = document.querySelectorAll('.password-input');
+
+        for (let i = 0; i < Math.min(paste.length, inputElements.length); i++) {
+          if (/^[a-zA-Z0-9]$/.test(paste[i])) {
+            inputElements[i].value = paste[i];
+          }
+        }
+      });
+
+      // Check password status on page load
+      window.onload = function() {
+        checkPasswordStatus();
+      };
+    </script>
+</body>
+</html>
