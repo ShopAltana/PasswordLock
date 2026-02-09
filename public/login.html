@@ -89,28 +89,6 @@
         }
       }
 
-      async function checkPasswordStatus() {
-        try {
-          const response = await fetch(`${API_URL}/check-passwords`);
-          const data = await response.json();
-          const statusBox = document.getElementById('statusBox');
-
-          if (data.exists && data.count > 0) {
-            statusBox.innerHTML = `
-              <p><strong>Active Passwords:</strong> ${data.count} password${data.count > 1 ? 's' : ''} available ✓</p>
-              <p><small>Any of the ${data.count} generated password${data.count > 1 ? 's' : ''} can be used to login</small></p>
-            `;
-          } else {
-            statusBox.innerHTML = `
-              <p><strong>Password Status:</strong> No active passwords</p>
-              <p>Please generate a password first.</p>
-            `;
-          }
-        } catch (error) {
-          console.error('Error checking status:', error);
-        }
-      }
-
       // Input handling
       const inputs = document.getElementById("inputs");
 
@@ -165,5 +143,6 @@
     </script>
 </body>
 </html>
+
 
 
