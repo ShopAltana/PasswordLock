@@ -1,0 +1,30 @@
+<!-- landing.html for loading render on static host -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Loading Page</title>
+    <link rel="stylesheet" href="shared.css" />
+</head>
+
+<body>
+  <div id="loading">
+    <h1>Loading Image Archive . . .</h1>
+    <div class="spinner"></div>
+  </div>
+</body>
+
+<script>
+  const API_URL = 'https://passwordlock.onrender.com/login.html';
+
+  async function checkAndRedirect() {
+    try {
+      await fetch(API_URL + '/health');
+      window.location.href = API_URL;
+    }
+    catch {
+      setTimeout(checkAndRedirect, 2000);
+    }
+  }
+
+  checkAndRedirect();
+</script>
