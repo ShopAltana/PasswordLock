@@ -59,7 +59,7 @@ app.post('/api/generate-password', async (req, res) => {
 
     const passwordData = {
       id: passwordId,
-      password: password.toUpperCase(),
+      password: password,
       expiryTime,
       createdAt: Date.now()
     };
@@ -100,7 +100,7 @@ app.post('/api/verify-password', async (req, res) => {
     }
 
     const matchingPassword = await passwordsCollection.findOne({
-      password: password.toUpperCase()
+      password: password
     });
 
     if (matchingPassword) {
@@ -183,5 +183,6 @@ connectDB().then(() => {
     console.log(`Server running on port ${PORT}`);
   });
 });
+
 
 
