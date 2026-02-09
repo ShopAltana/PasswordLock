@@ -103,7 +103,6 @@ label {
   text-align: center;
   font-size: 28px;
   font-weight: bold;
-  text-transform: uppercase;
   transition: border-color 0.3s;
 }
 
@@ -314,4 +313,5 @@ label {
   max-height: 400px;
   overflow-y: auto;
 }
+
 
